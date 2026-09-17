@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Fight round timer for MMA, boxing and Muay Thai — adjustable rounds, rest, warning and bell sounds.">
+<meta name="theme-color" content="#0E0E0C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MMA Timer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>body{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);}</style>
+<title>MMA Fight Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #0E0E0C;
+    --surface: #171714;
+    --line: #2C2B27;
+    --line-strong: #3A3833;
+    --text: #F2EFE6;
+    --muted: #A29E92;
+    --fight: #E5402F;
+    --fight-fill: #C9352A;
+    --warn: #F2A93B;
+    --rest: #2FB88A;
+    --prep: #E8E3D5;
+    --display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+    --body: 'Barlow', -apple-system, 'Helvetica Neue', sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--ground); color: var(--text); font-family: var(--body);
+    -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none; user-select: none; -webkit-user-select: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+  button:disabled { opacity: 0.28; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
+  .num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .hint { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  .app { height: 100%; max-width: 480px; margin: 0 auto; position: relative; overflow: hidden; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 18px; }
+  .foot { padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 10px; background: var(--ground); border-top: 1px solid var(--line); }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font-family: var(--display); font-weight: 700; font-size: 40px; line-height: 1; letter-spacing: 0.02em; margin: 2px 0 0; }
+  .round-btn { width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; flex-shrink: 0; }
+  .ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .preset { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; min-height: 60px; border-radius: 14px; background: var(--surface); border: 1.5px solid var(--line); text-align: left; }
+  .preset[aria-pressed="true"] { background: #2A1411; border-color: var(--fight); }
+  .preset b { font-size: 16px; font-weight: 600; }
+  .preset span { font-family: var(--display); font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 2px 14px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .row-label b { font-size: 16px; font-weight: 600; }
+  .stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .step { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--ground); font-size: 22px; font-weight: 500; line-height: 1; }
+  .step-val { width: 68px; text-align: center; font-size: 26px; font-weight: 700; }
+
+  .link-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); text-align: left; }
+  .link-row b { display: block; font-size: 16px; font-weight: 600; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
+  .total .num { font-size: 22px; font-weight: 700; }
+  .primary { height: 64px; border-radius: 18px; border: 0; background: var(--fight-fill); color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .primary:active { filter: brightness(0.9); }
+  .secondary { height: 56px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); font-size: 17px; font-weight: 600; }
+  .install { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line-strong); }
+  .install p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); flex: 1; }
+  .install strong { color: var(--text); font-weight: 600; }
+  .install .x { width: 44px; height: 44px; border: 0; background: none; color: var(--muted); }
+
+  .list { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .opt { width: 100%; display: flex; align-items: center; gap: 14px; padding: 12px 14px; min-height: 60px; border: 0; background: transparent; text-align: left; }
+  .opt + .opt { border-top: 1px solid var(--line); }
+  .opt b { display: block; font-size: 16px; font-weight: 600; }
+  .radio { width: 22px; height: 22px; border-radius: 11px; border: 2px solid #55534C; flex-shrink: 0; }
+  .opt[aria-checked="true"] .radio { border: 7px solid var(--fight); background: #fff; }
+  .opt .grow { flex: 1; min-width: 0; }
+  .switch { width: 51px; height: 31px; border-radius: 16px; background: #3A3833; position: relative; flex-shrink: 0; transition: background 0.2s; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 14px; background: #fff; transition: transform 0.2s; }
+  .opt[aria-checked="true"] .switch { background: var(--rest); }
+  .opt[aria-checked="true"] .switch::after { transform: translateX(20px); }
+
+  /* timer */
+  #timer { --accent: var(--fight); --tint: #1B0F0C; --on-accent: #fff; background: var(--tint); transition: background 0.4s; align-items: center; padding: 16px 20px 24px; gap: 10px; }
+  #timer[data-phase="rest"] { --accent: var(--rest); --tint: #0B1A14; --on-accent: var(--ground); }
+  #timer[data-phase="prep"] { --accent: var(--prep); --tint: #141412; --on-accent: var(--ground); }
+  #timer[data-warn="true"] { --accent: var(--warn); --tint: #1E160A; --on-accent: var(--ground); }
+  .tbar { align-self: stretch; display: flex; align-items: center; justify-content: space-between; }
+  .pill { height: 44px; min-width: 64px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--line-strong); background: rgba(0,0,0,0.2); font-size: 15px; font-weight: 600; }
+  .round-label { font-size: 20px; font-weight: 700; letter-spacing: 0.08em; }
+  .phase { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 6vh, 48px); letter-spacing: 0.12em; color: var(--accent); margin-top: 1vh; text-align: center; }
+  .ring { --size: min(84vw, 44vh, 360px); width: var(--size); height: var(--size); position: relative; flex-shrink: 0; }
+  .ring svg { width: 100%; height: 100%; display: block; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 10; }
+  .ring .track { stroke: rgba(255,255,255,0.1); }
+  .ring .bar { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 942.48; transition: stroke-dashoffset 0.12s linear, stroke 0.4s; }
+  .ring-inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .clock { font-family: var(--display); font-weight: 700; font-variant-numeric: tabular-nums; font-size: calc(var(--size) * 0.32); line-height: 1; transition: opacity 0.2s; }
+  #timer[data-running="false"] .clock { opacity: 0.45; }
+  .next { font-size: 15px; color: #BDB9AD; }
+  .pips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 320px; }
+  .pip { height: 8px; width: 16px; border-radius: 4px; background: rgba(255,255,255,0.18); transition: width 0.2s, background 0.2s; }
+  .pip.done { background: var(--text); }
+  .pip.cur { width: 28px; background: var(--accent); }
+  .controls { margin-top: auto; display: flex; align-items: center; gap: 28px; }
+  .ctl { width: 68px; height: 68px; border-radius: 34px; border: 1px solid var(--line-strong); background: rgba(0,0,0,0.2); display: grid; place-items: center; }
+  .ctl .ico { width: 26px; height: 26px; }
+  .play { width: 104px; height: 104px; border-radius: 52px; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; transition: background 0.4s; }
+  .play svg { width: 42px; height: 42px; fill: currentColor; }
+  .play:active, .ctl:active { transform: scale(0.96); }
+
+  .sheet-wrap { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; justify-content: flex-end; z-index: 5; }
+  .sheet { background: #1C1B18; border-radius: 24px 24px 0 0; padding: 24px 20px 28px; display: flex; flex-direction: column; gap: 12px; }
+  .sheet h2 { margin: 0; font-family: var(--display); font-size: 30px; }
+  .sheet p { margin: 0 0 6px; color: #BDB9AD; font-size: 15px; }
+
+  #done { align-items: stretch; padding: 20px 20px 24px; gap: 16px; }
+  .check { width: 112px; height: 112px; border-radius: 56px; background: var(--fight-fill); display: grid; place-items: center; align-self: center; margin-top: auto; }
+  .done-title { font-family: var(--display); font-weight: 700; font-size: 52px; line-height: 1; letter-spacing: 0.04em; text-align: center; margin: 4px 0 0; text-wrap: balance; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: auto; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stat .num { font-size: 30px; font-weight: 700; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <!-- SETUP -->
+  <section id="setup" class="screen" aria-label="Fight setup">
+    <div class="scroll">
+      <div class="topbar">
+        <div>
+          <div class="eyebrow">Fight timer</div>
+          <h1 class="brand">MMA TIMER</h1>
+        </div>
+        <button class="round-btn" id="openSounds" aria-label="Sound settings">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+        </button>
+      </div>
+
+      <div class="install" id="installTip" hidden>
+        <p>Install on iPhone: in Safari tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It then opens full screen and works offline.</p>
+        <button class="x" id="closeTip" aria-label="Dismiss install tip">✕</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="eyebrow">Presets</div>
+        <div class="presets" id="presets"></div>
+      </div>
+
+      <div class="card" id="rows"></div>
+
+      <button class="link-row" id="openSounds2">
+        <span><b>Sounds</b><span class="hint" id="soundSummary"></span></span>
+        <svg class="ico" viewBox="0 0 24 24" style="color:var(--muted);width:20px;height:20px"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="foot">
+      <div class="total"><span class="hint">Total fight time</span><span class="num" id="totalTime">17:00</span></div>
+      <button class="primary" id="startBtn">Start fight</button>
+    </div>
+  </section>
+
+  <!-- SOUNDS -->
+  <section id="sounds" class="screen" aria-label="Sounds" hidden>
+    <div class="scroll">
+      <div class="topbar" style="justify-content:flex-start">
+        <button class="round-btn" id="closeSounds" aria-label="Back to setup">
+          <svg class="ico" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+        <h1 class="brand" style="font-size:34px">SOUNDS</h1>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><div class="eyebrow">Round bell</div><div class="hint">Plays when each round starts and ends. Tap to preview.</div></div>
+        <div class="list" id="bellList" role="radiogroup" aria-label="Round bell"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><div class="eyebrow">Round-ending warning</div><div class="hint">Plays when the warning time is reached.</div></div>
+        <div class="list" id="warnList" role="radiogroup" aria-label="Warning sound"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><div class="eyebrow">Ticking</div><div class="hint">A clock tick every second.</div></div>
+        <div class="list" id="tickList"></div>
+      </div>
+      <p class="hint" style="margin:0">If you can't hear the bell, turn the iPhone silent switch off and turn the volume up. Keep the app open during a fight — iPhone pauses web apps when the screen locks.</p>
+    </div>
+    <div class="foot"><button class="secondary" id="soundsDone">Done</button></div>
+  </section>
+
+  <!-- TIMER -->
+  <section id="timer" class="screen" aria-label="Fight timer" hidden data-phase="round" data-running="true" data-warn="false">
+    <div class="tbar">
+      <button class="pill" id="endBtn">End</button>
+      <span class="num round-label" id="roundLabel">ROUND 1 OF 3</span>
+      <span style="min-width:64px"></span>
+    </div>
+    <div class="phase" id="phaseLabel" aria-live="polite">FIGHT</div>
+    <div class="ring">
+      <svg viewBox="0 0 320 320" aria-hidden="true">
+        <circle class="track" cx="160" cy="160" r="150"/>
+        <circle class="bar" id="ringBar" cx="160" cy="160" r="150" style="stroke-dashoffset:0"/>
+      </svg>
+      <div class="ring-inner">
+        <div class="clock" id="clock" role="timer">5:00</div>
+        <div class="next" id="nextLabel"></div>
+      </div>
+    </div>
+    <div class="pips" id="pips"></div>
+    <div class="controls">
+      <button class="ctl" id="restartBtn" aria-label="Restart this round">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+      <button class="play" id="playBtn" aria-label="Pause">
+        <svg viewBox="0 0 24 24" id="icoPause"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        <svg viewBox="0 0 24 24" id="icoPlay" hidden style="margin-left:4px"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
+      </button>
+      <button class="ctl" id="skipBtn" aria-label="Skip to next">
+        <svg class="ico" viewBox="0 0 24 24"><path d="m5 5 9 7-9 7V5z"/><path d="M19 5v14"/></svg>
+      </button>
+    </div>
+
+    <div class="sheet-wrap" id="confirm" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <h2 id="confirmTitle">END THIS FIGHT?</h2>
+        <p>The clock is paused. Ending returns you to setup.</p>
+        <button class="primary" id="confirmEnd" style="height:56px;font-size:17px;letter-spacing:0;text-transform:none">End fight</button>
+        <button class="secondary" id="keepGoing" style="background:transparent">Keep going</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DONE -->
+  <section id="done" class="screen" aria-label="Fight complete" hidden>
+    <div class="check"><svg viewBox="0 0 24 24" style="width:56px;height:56px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"><path d="m5 12 5 5L20 7"/></svg></div>
+    <h1 class="done-title">FIGHT COMPLETE</h1>
+    <div class="stats">
+      <div class="stat"><span class="num" id="statRounds">3</span><span class="hint">Rounds</span></div>
+      <div class="stat"><span class="num" id="statFight">15:00</span><span class="hint">Fight time</span></div>
+      <div class="stat"><span class="num" id="statRest">2:00</span><span class="hint">Rest time</span></div>
+    </div>
+    <button class="primary" id="againBtn">Run again</button>
+    <button class="secondary" id="setupBtn">Back to setup</button>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var IS_PWA = true;
+  var STORE = 'mmatimer.settings.v1';
+
+  var PRESETS = [
+    { name: 'Pro bout', rounds: 3, roundSec: 300, restSec: 60 },
+    { name: 'Title fight', rounds: 5, roundSec: 300, restSec: 60 },
+    { name: 'Boxing', rounds: 12, roundSec: 180, restSec: 60 },
+    { name: 'Muay Thai', rounds: 5, roundSec: 180, restSec: 120 }
+  ];
+  var BELLS = [
+    { id: 'bell', name: 'Boxing bell', desc: 'Classic triple ring' },
+    { id: 'horn', name: 'Air horn', desc: 'Cuts through crowd noise' },
+    { id: 'buzzer', name: 'Buzzer', desc: 'Arena-style buzzer' },
+    { id: 'whistle', name: 'Whistle', desc: 'Referee whistle' },
+    { id: 'beep', name: 'Digital beep', desc: 'Soft triple beep' }
+  ];
+  var WARNS = [
+    { id: 'clap', name: 'Wood clapper', desc: 'Two sharp claps' },
+    { id: 'beep', name: 'Digital beep', desc: 'Triple beep' },
+    { id: 'none', name: 'Silent', desc: 'Screen turns amber only' }
+  ];
+  var WARN_OPTS = [0, 5, 10, 15, 30];
+  var PREP_OPTS = [0, 3, 5, 10, 15];
+
+  var cfg = { rounds: 3, roundSec: 300, restSec: 60, warnSec: 10, prepSec: 10, bell: 'bell', warn: 'clap', tickRound: true, tickRest: false };
+  try { var saved = JSON.parse(localStorage.getItem(STORE) || 'null'); if (saved) for (var k in cfg) if (k in saved) cfg[k] = saved[k]; } catch (e) {}
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch (e) {} }
+
+  var $ = function (id) { return document.getElementById(id); };
+  function fmt(sec) { sec = Math.max(0, Math.round(sec)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  function show(id) { ['setup', 'sounds', 'timer', 'done'].forEach(function (s) { $(s).hidden = s !== id; }); }
+
+  /* ---------------- audio (synthesised: works offline, no files) ---------------- */
+  var ac = null, tickTock = false;
+  function audio() {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      if (!ac) {
+        var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+        ac = new AC();
+        var b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(0);
+      }
+      if (ac.state !== 'running') ac.resume();
+    } catch (e) { return null; }
+    return ac;
+  }
+  function tone(type, freq, at, dur, vol) {
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, at);
+    g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(ac.destination); o.start(at); o.stop(at + dur + 0.05); return o;
+  }
+  function noise(at, dur, vol, freq) {
+    var len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    var s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol;
+    s.connect(f); f.connect(g); g.connect(ac.destination); s.start(at);
+  }
+  function play(id) {
+    if (id === 'none' || !audio()) return;
+    try {
+      var t = ac.currentTime + 0.03;
+      if (id === 'bell') [0, 0.35, 0.7].forEach(function (o) { tone('sine', 660, t + o, 1.3, 0.4); tone('sine', 1822, t + o, 0.9, 0.14); tone('sine', 3564, t + o, 0.5, 0.06); });
+      if (id === 'horn') [220, 277, 330].forEach(function (f) { tone('sawtooth', f, t, 1.1, 0.14); });
+      if (id === 'buzzer') { tone('square', 110, t, 1.0, 0.2); tone('square', 116, t, 1.0, 0.14); }
+      if (id === 'whistle') { var o = tone('sine', 2600, t, 0.9, 0.28), l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 28; lg.gain.value = 180; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + 1); }
+      if (id === 'beep') [0, 0.25, 0.5].forEach(function (o, i) { tone('sine', i === 2 ? 1320 : 880, t + o, 0.14, 0.35); });
+      if (id === 'clap') { noise(t, 0.05, 1, 1800); noise(t + 0.14, 0.05, 1, 1800); }
+      if (id === 'tick') tone('sine', 1000, t, 0.08, 0.25);
+      if (id === 'clock') { tickTock = !tickTock; noise(t, 0.012, 0.9, tickTock ? 3200 : 2500); tone('sine', tickTock ? 1500 : 1150, t, 0.03, 0.08); }
+    } catch (e) {}
+  }
+
+  /* ---------------- screen wake lock ---------------- */
+  var lock = null;
+  function wakeOn() { try { if ('wakeLock' in navigator && !lock) navigator.wakeLock.request('screen').then(function (l) { lock = l; l.addEventListener('release', function () { lock = null; }); }).catch(function () {}); } catch (e) {} }
+  function wakeOff() { try { if (lock) lock.release(); } catch (e) {} lock = null; }
+
+  /* ---------------- setup UI ---------------- */
+  function renderSetup() {
+    var p = $('presets'); p.innerHTML = '';
+    PRESETS.forEach(function (pr) {
+      var b = document.createElement('button'); b.className = 'preset'; b.type = 'button';
+      b.setAttribute('aria-pressed', String(pr.rounds === cfg.rounds && pr.roundSec === cfg.roundSec && pr.restSec === cfg.restSec));
+      b.innerHTML = '<b></b><span></span>';
+      b.firstChild.textContent = pr.name;
+      b.lastChild.textContent = pr.rounds + ' × ' + fmt(pr.roundSec) + ' · ' + fmt(pr.restSec) + ' rest';
+      b.onclick = function () { cfg.rounds = pr.rounds; cfg.roundSec = pr.roundSec; cfg.restSec = pr.restSec; changed(); };
+      p.appendChild(b);
+    });
+    function cyc(opts, cur, dir) { var i = opts.indexOf(cur); if (i < 0) i = 0; return opts[Math.min(opts.length - 1, Math.max(0, i + dir))]; }
+    var rows = [
+      { key: 'rounds', label: 'Rounds', sub: 'Number of rounds', val: String(cfg.rounds), dec: function () { cfg.rounds = Math.max(1, cfg.rounds - 1); }, inc: function () { cfg.rounds = Math.min(15, cfg.rounds + 1); }, min: cfg.rounds <= 1, max: cfg.rounds >= 15 },
+      { key: 'round', label: 'Round time', sub: '30-second steps', val: fmt(cfg.roundSec), dec: function () { cfg.roundSec = Math.max(30, cfg.roundSec - 30); }, inc: function () { cfg.roundSec = Math.min(900, cfg.roundSec + 30); }, min: cfg.roundSec <= 30, max: cfg.roundSec >= 900 },
+      { key: 'rest', label: 'Rest time', sub: 'Between rounds', val: fmt(cfg.restSec), dec: function () { cfg.restSec = Math.max(0, cfg.restSec - 15); }, inc: function () { cfg.restSec = Math.min(300, cfg.restSec + 15); }, min: cfg.restSec <= 0, max: cfg.restSec >= 300 },
+      { key: 'warn', label: 'Warning', sub: 'Before round ends', val: cfg.warnSec ? cfg.warnSec + 's' : 'Off', dec: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, -1); }, inc: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, 1); }, min: cfg.warnSec <= 0, max: cfg.warnSec >= 30 },
+      { key: 'prep', label: 'Get ready', sub: 'Countdown before round 1', val: cfg.prepSec ? cfg.prepSec + 's' : 'Off', dec: function () { cfg.prepSec = cyc(PREP_OPTS, cfg.prepSec, -1); }, inc: function () { cfg.prepSec = cyc(PREP_OPTS, cfg.prepSec, 1); }, min: cfg.prepSec <= 0, max: cfg.prepSec >= 15 }
+    ];
+    var box = $('rows'); box.innerHTML = '';
+    rows.forEach(function (r) {
+      var row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = '<div class="row-label"><b></b><span class="hint"></span></div><div class="stepper"><button class="step" type="button" id="dec-' + r.key + '">−</button><span class="num step-val" aria-live="polite"></span><button class="step" type="button" id="inc-' + r.key + '">+</button></div>';
+      row.querySelector('b').textContent = r.label;
+      row.querySelector('.hint').textContent = r.sub;
+      row.querySelector('.step-val').textContent = r.val;
+      var d = row.querySelector('#dec-' + r.key), i = row.querySelector('#inc-' + r.key);
+      d.setAttribute('aria-label', 'Decrease ' + r.label.toLowerCase()); i.setAttribute('aria-label', 'Increase ' + r.label.toLowerCase());
+      d.disabled = r.min; i.disabled = r.max;
+      d.onclick = function () { r.dec(); changed(r.key, 'dec'); };
+      i.onclick = function () { r.inc(); changed(r.key, 'inc'); };
+      box.appendChild(row);
+    });
+    $('totalTime').textContent = fmt(cfg.rounds * cfg.roundSec + Math.max(0, cfg.rounds - 1) * cfg.restSec);
+    $('soundSummary').textContent = 'Bell: ' + byId(BELLS, cfg.bell).name + ' · Warning: ' + byId(WARNS, cfg.warn).name + ' · Ticking: ' + tickSummary();
+  }
+  function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return list[0]; }
+  function changed(key, dir) {
+    save(); renderSetup();
+    if (key) { var el = $((dir) + '-' + key); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+  }
+
+  function renderSounds() {
+    [[BELLS, 'bellList', 'bell'], [WARNS, 'warnList', 'warn']].forEach(function (g) {
+      var box = $(g[1]); box.innerHTML = '';
+      g[0].forEach(function (s) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(cfg[g[2]] === s.id));
+        b.innerHTML = '<span class="radio"></span><span class="grow"><b></b><span class="hint"></span></span>';
+        b.querySelector('b').textContent = s.name; b.querySelector('.hint').textContent = s.desc;
+        b.onclick = function () { cfg[g[2]] = s.id; save(); renderSounds(); play(s.id); };
+        box.appendChild(b);
+      });
+    });
+    var tl = $('tickList'); tl.innerHTML = '';
+    [['tickRound', 'During rounds', 'Ticks every second while fighting'], ['tickRest', 'During rest', 'Ticks every second between rounds']].forEach(function (r) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'sw-' + r[0];
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!cfg[r[0]]));
+      b.innerHTML = '<span class="grow"><b></b><span class="hint"></span></span><span class="switch" aria-hidden="true"></span>';
+      b.querySelector('b').textContent = r[1]; b.querySelector('.hint').textContent = r[2];
+      b.onclick = function () { cfg[r[0]] = !cfg[r[0]]; save(); renderSounds(); if (cfg[r[0]]) { play('clock'); setTimeout(function () { play('clock'); }, 1000); } var el = $('sw-' + r[0]); if (el) el.focus({ preventScroll: true }); };
+      tl.appendChild(b);
+    });
+  }
+  function tickSummary() {
+    if (cfg.tickRound && cfg.tickRest) return 'Rounds + rest';
+    if (cfg.tickRound) return 'Rounds';
+    if (cfg.tickRest) return 'Rest';
+    return 'Off';
+  }
+
+  /* ---------------- timer engine (clock-based, survives lag and backgrounding) ---------------- */
+  var T = { phase: 'round', round: 1, running: false, endAt: 0, remMs: 0, lastSec: -1, loop: null };
+  function dur(phase) { return phase === 'prep' ? cfg.prepSec : phase === 'rest' ? cfg.restSec : cfg.roundSec; }
+  function now() { return Date.now(); }
+  function next(phase, round) {
+    if (phase === 'prep') return { phase: 'round', round: 1 };
+    if (phase === 'round') {
+      if (round >= cfg.rounds) return null;
+      return cfg.restSec > 0 ? { phase: 'rest', round: round } : { phase: 'round', round: round + 1 };
+    }
+    return { phase: 'round', round: round + 1 };
+  }
+  function enter(n, startAt) {
+    T.phase = n.phase; T.round = n.round;
+    T.endAt = startAt + dur(n.phase) * 1000; T.remMs = dur(n.phase) * 1000; T.lastSec = dur(n.phase);
+    buildPips();
+  }
+  function startFight() {
+    audio(); wakeOn();
+    var first = cfg.prepSec > 0 ? { phase: 'prep', round: 1 } : { phase: 'round', round: 1 };
+    enter(first, now()); T.running = true;
+    if (first.phase === 'round') play(cfg.bell);
+    $('confirm').hidden = true; show('timer'); runLoop(); render();
+  }
+  function runLoop() { stopLoop(); T.loop = setInterval(tick, 100); }
+  function stopLoop() { if (T.loop) clearInterval(T.loop); T.loop = null; }
+  function tick() {
+    if (!T.running) return;
+    var t = now(), moved = 0;
+    while (T.endAt <= t) {
+      var n = next(T.phase, T.round);
+      if (!n) { finish(); return; }
+      enter(n, T.endAt); moved++;
+    }
+    if (moved) play(cfg.bell);
+    var rem = T.endAt - t, sec = Math.ceil(rem / 1000);
+    if (sec !== T.lastSec) {
+      var warned = false;
+      if (!moved && T.phase === 'round' && cfg.warnSec > 0 && T.lastSec > cfg.warnSec && sec <= cfg.warnSec && sec >= cfg.warnSec - 1) { play(cfg.warn); warned = cfg.warn !== 'none'; }
+      if (!moved && T.phase === 'prep' && sec >= 1 && sec <= 3) play('tick');
+      // continuous ticking; skipped on the second the warning sound plays so they don't clash
+      if (!moved && !warned && sec >= 1 && T.lastSec - sec === 1 &&
+          ((T.phase === 'round' && cfg.tickRound) || (T.phase === 'rest' && cfg.tickRest))) play('clock');
+      T.lastSec = sec;
+    }
+    T.remMs = rem; render();
+  }
+  function finish() {
+    stopLoop(); T.running = false; wakeOff(); play(cfg.bell);
+    $('statRounds').textContent = cfg.rounds;
+    $('statFight').textContent = fmt(cfg.rounds * cfg.roundSec);
+    $('statRest').textContent = fmt(Math.max(0, cfg.rounds - 1) * cfg.restSec);
+    show('done');
+  }
+  function pause() { if (!T.running) return; T.remMs = Math.max(0, T.endAt - now()); T.running = false; stopLoop(); wakeOff(); render(); }
+  function resume() { if (T.running) return; audio(); wakeOn(); T.endAt = now() + T.remMs; T.running = true; runLoop(); render(); }
+  function skip() {
+    var n = next(T.phase, T.round);
+    if (!n) { finish(); return; }
+    enter(n, now()); play(cfg.bell);
+    if (!T.running) T.remMs = dur(T.phase) * 1000;
+    render();
+  }
+  function restart() { T.remMs = dur(T.phase) * 1000; T.endAt = now() + T.remMs; T.lastSec = dur(T.phase); render(); }
+
+  function buildPips() {
+    var box = $('pips'); box.innerHTML = '';
+    for (var i = 1; i <= cfg.rounds; i++) {
+      var s = document.createElement('span'); s.className = 'pip';
+      if (i < T.round || (i === T.round && T.phase === 'rest')) s.className += ' done';
+      if (i === T.round && T.phase === 'round') s.className += ' cur';
+      box.appendChild(s);
+    }
+    $('restartBtn').setAttribute('aria-label', T.phase === 'rest' ? 'Restart rest' : T.phase === 'prep' ? 'Restart countdown' : 'Restart this round');
+  }
+  function render() {
+    var total = dur(T.phase) * 1000 || 1;
+    var rem = T.running ? Math.max(0, T.endAt - now()) : T.remMs;
+    var sec = Math.ceil(rem / 1000);
+    var warn = T.phase === 'round' && cfg.warnSec > 0 && sec <= cfg.warnSec;
+    var el = $('timer');
+    el.dataset.phase = T.phase; el.dataset.running = String(T.running); el.dataset.warn = String(warn);
+    $('roundLabel').textContent = 'ROUND ' + T.round + ' OF ' + cfg.rounds;
+    var label = T.phase === 'rest' ? 'REST' : T.phase === 'prep' ? 'GET READY' : warn ? sec + ' SECONDS' : 'FIGHT';
+    if (!T.running) label = 'PAUSED';
+    if ($('phaseLabel').textContent !== label) $('phaseLabel').textContent = label;
+    $('clock').textContent = fmt(sec);
+    $('ringBar').style.strokeDashoffset = (942.48 * (1 - Math.min(1, rem / total))).toFixed(2);
+    var nx;
+    if (T.phase === 'prep') nx = 'Round 1 · ' + fmt(cfg.roundSec);
+    else if (T.phase === 'rest') nx = 'Next: Round ' + (T.round + 1);
+    else nx = T.round >= cfg.rounds ? 'Final round' : cfg.restSec > 0 ? 'Next: Rest · ' + fmt(cfg.restSec) : 'Next: Round ' + (T.round + 1);
+    $('nextLabel').textContent = nx;
+    $('icoPause').hidden = !T.running; $('icoPlay').hidden = T.running;
+    $('playBtn').setAttribute('aria-label', T.running ? 'Pause' : 'Resume');
+    document.title = T.running && !$('timer').hidden ? fmt(sec) + ' · ' + label : 'MMA Fight Timer';
+  }
+
+  /* ---------------- wiring ---------------- */
+  function openSounds() { renderSounds(); show('sounds'); }
+  function closeSounds() { renderSetup(); show('setup'); }
+  $('openSounds').onclick = openSounds; $('openSounds2').onclick = openSounds;
+  $('closeSounds').onclick = closeSounds; $('soundsDone').onclick = closeSounds;
+  $('startBtn').onclick = startFight; $('againBtn').onclick = startFight;
+  $('setupBtn').onclick = function () { renderSetup(); show('setup'); document.title = 'MMA Fight Timer'; };
+  $('playBtn').onclick = function () { T.running ? pause() : resume(); };
+  $('skipBtn').onclick = skip; $('restartBtn').onclick = restart;
+  var wasRunning = false;
+  $('endBtn').onclick = function () { wasRunning = T.running; pause(); $('confirm').hidden = false; $('keepGoing').focus(); };
+  $('keepGoing').onclick = function () { $('confirm').hidden = true; if (wasRunning) resume(); };
+  $('confirmEnd').onclick = function () { $('confirm').hidden = true; stopLoop(); T.running = false; wakeOff(); renderSetup(); show('setup'); document.title = 'MMA Fight Timer'; };
+  document.addEventListener('keydown', function (e) {
+    if ($('timer').hidden || !$('confirm').hidden) return;
+    if (e.code === 'Space') { e.preventDefault(); T.running ? pause() : resume(); }
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && T.running) { wakeOn(); if (ac && ac.state !== 'running') { try { ac.resume(); } catch (e) {} } tick(); }
+  });
+
+  // install tip: iPhone/iPad Safari, not yet installed
+  try {
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    var dismissed = false; try { dismissed = localStorage.getItem('mmatimer.tip') === '1'; } catch (e) {}
+    $('installTip').hidden = !(IS_PWA && ios && !standalone && !dismissed);
+  } catch (e) {}
+  $('closeTip').onclick = function () { $('installTip').hidden = true; try { localStorage.setItem('mmatimer.tip', '1'); } catch (e) {} };
+
+  if (IS_PWA && 'serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+
+  renderSetup(); show('setup');
+})();
+</script>
+
+</body>
+</html>
