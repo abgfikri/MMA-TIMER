@@ -13,7 +13,7 @@ Open the link in **Safari** → tap **Share** → **Add to Home Screen** → **A
 It opens full screen with its own icon and works offline after the first visit.
 
 ## Updating the app
-Upload the changed files, then change `CACHE = 'mmatimer-v1'` in `sw.js` to `v2`, `v3`…
+Upload the changed files, then change the version in `sw.js` (currently `mmatimer-v6`) to `mmatimer-v7`, then v8, and so on
 so phones pick up the new version (it applies the next time the app is opened).
 
 ## Known iPhone limits of web apps

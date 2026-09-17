@@ -195,12 +195,21 @@
         <div class="list" id="bellList" role="radiogroup" aria-label="Round bell"></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <div><div class="eyebrow">Round-ending warning</div><div class="hint">Plays when the warning time is reached.</div></div>
+        <div><div class="eyebrow">Warning sound</div><div class="hint">Plays when the warning time is reached (set on the Setup screen).</div></div>
         <div class="list" id="warnList" role="radiogroup" aria-label="Warning sound"></div>
+        <div class="list" id="restWarnList"></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <div><div class="eyebrow">Ticking</div><div class="hint">A clock tick every second.</div></div>
+        <div><div class="eyebrow">Ticking</div><div class="hint">A steady tick to pace the round.</div></div>
         <div class="list" id="tickList"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><div class="eyebrow">Tick sound</div><div class="hint">Tap to preview.</div></div>
+        <div class="list" id="tickSoundList" role="radiogroup" aria-label="Tick sound"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><div class="eyebrow">Tick speed</div></div>
+        <div class="list" id="tickRateList" role="radiogroup" aria-label="Tick speed"></div>
       </div>
       <p class="hint" style="margin:0">If you can't hear the bell, turn the iPhone silent switch off and turn the volume up. Keep the app open during a fight — iPhone pauses web apps when the screen locks.</p>
     </div>
@@ -280,18 +289,38 @@
     { id: 'horn', name: 'Air horn', desc: 'Cuts through crowd noise' },
     { id: 'buzzer', name: 'Buzzer', desc: 'Arena-style buzzer' },
     { id: 'whistle', name: 'Whistle', desc: 'Referee whistle' },
-    { id: 'beep', name: 'Digital beep', desc: 'Soft triple beep' }
+    { id: 'beep', name: 'Digital beep', desc: 'Soft triple beep' },
+    { id: 'bell1', name: 'Single bell', desc: 'One long ring' },
+    { id: 'bell2', name: 'Double bell', desc: 'Two strikes' },
+    { id: 'gong', name: 'Gong', desc: 'Deep, long gong' },
+    { id: 'siren', name: 'Siren', desc: 'Rising alarm' },
+    { id: 'chime', name: 'Chime', desc: 'Three rising notes' }
   ];
   var WARNS = [
-    { id: 'clap', name: 'Wood clapper', desc: 'Two sharp claps' },
+    { id: 'clap', name: 'Wood clapper', desc: 'Rapid wood-stick clacks, like pro fights' },
+    { id: 'clap2', name: 'Double clapper', desc: 'Two spaced, sharp, loud clacks' },
+    { id: 'voice', name: 'Voice callout', desc: 'Says "10 seconds" and "Get ready"' },
+    { id: 'ding', name: 'Ding', desc: 'Two light bell dings' },
+    { id: 'whistle2', name: 'Whistle blasts', desc: 'Two short blasts' },
     { id: 'beep', name: 'Digital beep', desc: 'Triple beep' },
     { id: 'none', name: 'Silent', desc: 'Screen turns amber only' }
+  ];
+  var TICKS = [
+    { id: 'clock', name: 'Stopwatch', desc: 'Sharp tick-tock click' },
+    { id: 'wood', name: 'Wood tick', desc: 'Soft wooden knock' },
+    { id: 'metro', name: 'Metronome', desc: 'Electronic click' },
+    { id: 'hat', name: 'Hi-hat', desc: 'Crisp, drum-style tick' }
+  ];
+  var RATES = [
+    { id: 1000, name: 'Steady', desc: '1 tick per second' },
+    { id: 500, name: 'Fast', desc: '2 ticks per second' },
+    { id: 375, name: 'Faster', desc: 'About 3 ticks per second' }
   ];
   var WARN_OPTS = [0, 5, 10, 15, 30];
   var PREP_OPTS = [0, 3, 5, 10, 15];
 
-  var cfg = { rounds: 3, roundSec: 300, restSec: 60, warnSec: 10, prepSec: 10, bell: 'bell', warn: 'clap', tickRound: true, tickRest: false };
-  try { var saved = JSON.parse(localStorage.getItem(STORE) || 'null'); if (saved) for (var k in cfg) if (k in saved) cfg[k] = saved[k]; } catch (e) {}
+  var cfg = { rounds: 3, roundSec: 300, restSec: 60, warnSec: 10, prepSec: 10, bell: 'bell', warn: 'clap2', tickRound: true, tickRest: false, restWarn: true, tickSound: 'clock', tickRate: 375 };
+  try { var saved = JSON.parse(localStorage.getItem(STORE) || 'null'); if (saved) { for (var k in cfg) if (k in saved) cfg[k] = saved[k]; if (!('tickRate' in saved) && saved.tickFast === false) cfg.tickRate = 1000; if (cfg.warn === 'clap3') cfg.warn = 'clap2'; } } catch (e) {}
   function save() { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch (e) {} }
 
   var $ = function (id) { return document.getElementById(id); };
@@ -299,16 +328,23 @@
   function show(id) { ['setup', 'sounds', 'timer', 'done'].forEach(function (s) { $(s).hidden = s !== id; }); }
 
   /* ---------------- audio (synthesised: works offline, no files) ---------------- */
-  var ac = null, tickTock = false;
+  var ac = null, bus = null, tickTock = false, spoke = false;
   function audio() {
     try {
       if (navigator.audioSession) navigator.audioSession.type = 'playback';
       if (!ac) {
         var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
         ac = new AC();
+        // soft clipper: loud hits stay clean and can never exceed full scale
+        bus = ac.createGain(); bus.gain.value = 0.5;
+        var sh = ac.createWaveShaper(), curve = new Float32Array(2049);
+        for (var ci = 0; ci < curve.length; ci++) curve[ci] = Math.tanh(2.4 * (ci / 1024 - 1));
+        sh.curve = curve; sh.oversample = 'none';
+        bus.connect(sh); sh.connect(ac.destination);
         var b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(0);
       }
       if (ac.state !== 'running') ac.resume();
+      if (!spoke && window.speechSynthesis) { spoke = true; var u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
     } catch (e) { return null; }
     return ac;
   }
@@ -316,17 +352,31 @@
     var o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, at);
     g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    o.connect(g); g.connect(ac.destination); o.start(at); o.stop(at + dur + 0.05); return o;
+    o.connect(g); g.connect(bus || ac.destination); o.start(at); o.stop(at + dur + 0.05); return o;
   }
-  function noise(at, dur, vol, freq) {
+  function noise(at, dur, vol, freq, q) {
     var len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
     for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
     var s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-    s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol;
-    s.connect(f); f.connect(g); g.connect(ac.destination); s.start(at);
+    s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; if (q) f.Q.value = q; g.gain.value = vol;
+    s.connect(f); f.connect(g); g.connect(bus || ac.destination); s.start(at);
   }
-  function play(id) {
-    if (id === 'none' || !audio()) return;
+  function clack(at, hi, vol) {
+    noise(at, 0.035, 6 * vol, hi ? 1250 : 1050, 6); tone('triangle', hi ? 980 : 860, at, 0.07, 0.35 * vol); tone('sine', hi ? 2150 : 1900, at, 0.025, 0.12 * vol);
+  }
+  function sharpClack(at) {
+    noise(at, 0.004, 8, 3800, 1.2);           // hard attack transient
+    noise(at, 0.028, 10, 1700, 5);            // wood body
+    tone('triangle', 1180, at, 0.05, 0.6);
+    tone('sine', 2450, at, 0.018, 0.3);
+  }
+  function say(text) {
+    try { if (!window.speechSynthesis) return; var u = new SpeechSynthesisUtterance(text); u.rate = 1.05; u.volume = 1; u.lang = 'en-US'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+  }
+  function play(id, ctx) {
+    if (id === 'none') return;
+    if (id === 'voice') { audio(); say(ctx === 'rest' ? 'Get ready' : (cfg.warnSec || 10) + ' seconds'); return; }
+    if (!audio()) return;
     try {
       var t = ac.currentTime + 0.03;
       if (id === 'bell') [0, 0.35, 0.7].forEach(function (o) { tone('sine', 660, t + o, 1.3, 0.4); tone('sine', 1822, t + o, 0.9, 0.14); tone('sine', 3564, t + o, 0.5, 0.06); });
@@ -334,9 +384,20 @@
       if (id === 'buzzer') { tone('square', 110, t, 1.0, 0.2); tone('square', 116, t, 1.0, 0.14); }
       if (id === 'whistle') { var o = tone('sine', 2600, t, 0.9, 0.28), l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 28; lg.gain.value = 180; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + 1); }
       if (id === 'beep') [0, 0.25, 0.5].forEach(function (o, i) { tone('sine', i === 2 ? 1320 : 880, t + o, 0.14, 0.35); });
-      if (id === 'clap') { noise(t, 0.05, 1, 1800); noise(t + 0.14, 0.05, 1, 1800); }
+      if (id === 'clap') for (var c = 0; c < 6; c++) clack(t + c * 0.15, c % 2 === 0, 1);
+      if (id === 'clap2') { sharpClack(t); sharpClack(t + 0.45); }
+      if (id === 'bell1') { tone('sine', 620, t, 2.6, 0.45); tone('sine', 1710, t, 1.6, 0.14); tone('sine', 3350, t, 0.8, 0.06); }
+      if (id === 'bell2') [0, 0.45].forEach(function (o) { tone('sine', 660, t + o, 1.6, 0.42); tone('sine', 1822, t + o, 1.0, 0.14); tone('sine', 3564, t + o, 0.5, 0.06); });
+      if (id === 'gong') { [[98, 0.5], [147, 0.28], [196, 0.2], [262, 0.12], [331, 0.08]].forEach(function (p) { tone('sine', p[0], t, 3.2, p[1]); }); noise(t, 0.08, 1.2, 400, 2); }
+      if (id === 'siren') { var so = tone('sawtooth', 420, t, 1.4, 0.12); so.frequency.linearRampToValueAtTime(950, t + 0.7); so.frequency.linearRampToValueAtTime(420, t + 1.4); var so2 = tone('square', 423, t, 1.4, 0.05); so2.frequency.linearRampToValueAtTime(955, t + 0.7); so2.frequency.linearRampToValueAtTime(423, t + 1.4); }
+      if (id === 'chime') [784, 988, 1175].forEach(function (f, i) { tone('sine', f, t + i * 0.18, 1.0, 0.3); tone('sine', f * 2, t + i * 0.18, 0.5, 0.06); });
+      if (id === 'ding') [0, 0.35].forEach(function (o) { tone('sine', 1568, t + o, 0.9, 0.3); tone('sine', 3920, t + o, 0.4, 0.07); });
+      if (id === 'whistle2') [0, 0.4].forEach(function (o) { var wo = tone('sine', 2700, t + o, 0.28, 0.28), l2 = ac.createOscillator(), g2 = ac.createGain(); l2.frequency.value = 30; g2.gain.value = 160; l2.connect(g2); g2.connect(wo.frequency); l2.start(t + o); l2.stop(t + o + 0.35); });
+      if (id === 'wood') { tickTock = !tickTock; noise(t, 0.02, 2.5, tickTock ? 1500 : 1300, 6); tone('triangle', tickTock ? 1050 : 920, t, 0.04, 0.16); }
+      if (id === 'metro') { tickTock = !tickTock; tone('square', tickTock ? 1900 : 1500, t, 0.02, 0.07); }
+      if (id === 'hat') { tickTock = !tickTock; noise(t, tickTock ? 0.03 : 0.02, 1.6, 8000, 1); }
       if (id === 'tick') tone('sine', 1000, t, 0.08, 0.25);
-      if (id === 'clock') { tickTock = !tickTock; noise(t, 0.012, 0.9, tickTock ? 3200 : 2500); tone('sine', tickTock ? 1500 : 1150, t, 0.03, 0.08); }
+      if (id === 'clock') { tickTock = !tickTock; noise(t, 0.006, 2.2, tickTock ? 4200 : 3400, 3); tone('sine', tickTock ? 2100 : 1700, t, 0.018, 0.1); }
     } catch (e) {}
   }
 
@@ -362,7 +423,7 @@
       { key: 'rounds', label: 'Rounds', sub: 'Number of rounds', val: String(cfg.rounds), dec: function () { cfg.rounds = Math.max(1, cfg.rounds - 1); }, inc: function () { cfg.rounds = Math.min(15, cfg.rounds + 1); }, min: cfg.rounds <= 1, max: cfg.rounds >= 15 },
       { key: 'round', label: 'Round time', sub: '30-second steps', val: fmt(cfg.roundSec), dec: function () { cfg.roundSec = Math.max(30, cfg.roundSec - 30); }, inc: function () { cfg.roundSec = Math.min(900, cfg.roundSec + 30); }, min: cfg.roundSec <= 30, max: cfg.roundSec >= 900 },
       { key: 'rest', label: 'Rest time', sub: 'Between rounds', val: fmt(cfg.restSec), dec: function () { cfg.restSec = Math.max(0, cfg.restSec - 15); }, inc: function () { cfg.restSec = Math.min(300, cfg.restSec + 15); }, min: cfg.restSec <= 0, max: cfg.restSec >= 300 },
-      { key: 'warn', label: 'Warning', sub: 'Before round ends', val: cfg.warnSec ? cfg.warnSec + 's' : 'Off', dec: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, -1); }, inc: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, 1); }, min: cfg.warnSec <= 0, max: cfg.warnSec >= 30 },
+      { key: 'warn', label: 'Warning', sub: cfg.restWarn ? 'Before round and rest end' : 'Before round ends', val: cfg.warnSec ? cfg.warnSec + 's' : 'Off', dec: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, -1); }, inc: function () { cfg.warnSec = cyc(WARN_OPTS, cfg.warnSec, 1); }, min: cfg.warnSec <= 0, max: cfg.warnSec >= 30 },
       { key: 'prep', label: 'Get ready', sub: 'Countdown before round 1', val: cfg.prepSec ? cfg.prepSec + 's' : 'Off', dec: function () { cfg.prepSec = cyc(PREP_OPTS, cfg.prepSec, -1); }, inc: function () { cfg.prepSec = cyc(PREP_OPTS, cfg.prepSec, 1); }, min: cfg.prepSec <= 0, max: cfg.prepSec >= 15 }
     ];
     var box = $('rows'); box.innerHTML = '';
@@ -389,24 +450,37 @@
   }
 
   function renderSounds() {
-    [[BELLS, 'bellList', 'bell'], [WARNS, 'warnList', 'warn']].forEach(function (g) {
+    function tickDemo(snd, gap) { for (var i = 0; i < 6; i++) (function (i) { setTimeout(function () { play(snd); }, i * gap); })(i); }
+    [
+      [BELLS, 'bellList', 'bell', function (v) { play(v); }],
+      [WARNS, 'warnList', 'warn', function (v) { play(v, 'round'); }],
+      [TICKS, 'tickSoundList', 'tickSound', function (v) { tickDemo(v, cfg.tickRate); }],
+      [RATES, 'tickRateList', 'tickRate', function (v) { tickDemo(cfg.tickSound, v); }]
+    ].forEach(function (g) {
       var box = $(g[1]); box.innerHTML = '';
       g[0].forEach(function (s) {
         var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.setAttribute('role', 'radio');
         b.setAttribute('aria-checked', String(cfg[g[2]] === s.id));
         b.innerHTML = '<span class="radio"></span><span class="grow"><b></b><span class="hint"></span></span>';
         b.querySelector('b').textContent = s.name; b.querySelector('.hint').textContent = s.desc;
-        b.onclick = function () { cfg[g[2]] = s.id; save(); renderSounds(); play(s.id); };
+        b.id = 'opt-' + g[2] + '-' + s.id;
+        b.onclick = function () { cfg[g[2]] = s.id; save(); renderSounds(); g[3](s.id); var el = $('opt-' + g[2] + '-' + s.id); if (el) el.focus({ preventScroll: true }); };
         box.appendChild(b);
       });
     });
+    var rw = $('restWarnList'); rw.innerHTML = '';
+    var rb = document.createElement('button'); rb.type = 'button'; rb.className = 'opt'; rb.id = 'sw-restWarn';
+    rb.setAttribute('role', 'switch'); rb.setAttribute('aria-checked', String(!!cfg.restWarn));
+    rb.innerHTML = '<span class="grow"><b>Get-ready warning in rest</b><span class="hint">Same sound before rest ends, so fighters are ready for the next round</span></span><span class="switch" aria-hidden="true"></span>';
+    rb.onclick = function () { cfg.restWarn = !cfg.restWarn; save(); renderSounds(); if (cfg.restWarn) play(cfg.warn, 'rest'); var el = $('sw-restWarn'); if (el) el.focus({ preventScroll: true }); };
+    rw.appendChild(rb);
     var tl = $('tickList'); tl.innerHTML = '';
-    [['tickRound', 'During rounds', 'Ticks every second while fighting'], ['tickRest', 'During rest', 'Ticks every second between rounds']].forEach(function (r) {
+    [['tickRound', 'During rounds', 'Ticks while fighting'], ['tickRest', 'During rest', 'Ticks between rounds']].forEach(function (r) {
       var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'sw-' + r[0];
       b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!cfg[r[0]]));
       b.innerHTML = '<span class="grow"><b></b><span class="hint"></span></span><span class="switch" aria-hidden="true"></span>';
       b.querySelector('b').textContent = r[1]; b.querySelector('.hint').textContent = r[2];
-      b.onclick = function () { cfg[r[0]] = !cfg[r[0]]; save(); renderSounds(); if (cfg[r[0]]) { play('clock'); setTimeout(function () { play('clock'); }, 1000); } var el = $('sw-' + r[0]); if (el) el.focus({ preventScroll: true }); };
+      b.onclick = function () { cfg[r[0]] = !cfg[r[0]]; save(); renderSounds(); if (cfg[r[0]]) tickDemo(cfg.tickSound, cfg.tickRate); var el = $('sw-' + r[0]); if (el) el.focus({ preventScroll: true }); };
       tl.appendChild(b);
     });
   }
@@ -418,7 +492,7 @@
   }
 
   /* ---------------- timer engine (clock-based, survives lag and backgrounding) ---------------- */
-  var T = { phase: 'round', round: 1, running: false, endAt: 0, remMs: 0, lastSec: -1, loop: null };
+  var T = { phase: 'round', round: 1, running: false, endAt: 0, remMs: 0, lastSec: -1, lastTick: -1, quietUntil: 0, loop: null };
   function dur(phase) { return phase === 'prep' ? cfg.prepSec : phase === 'rest' ? cfg.restSec : cfg.roundSec; }
   function now() { return Date.now(); }
   function next(phase, round) {
@@ -431,7 +505,7 @@
   }
   function enter(n, startAt) {
     T.phase = n.phase; T.round = n.round;
-    T.endAt = startAt + dur(n.phase) * 1000; T.remMs = dur(n.phase) * 1000; T.lastSec = dur(n.phase);
+    T.endAt = startAt + dur(n.phase) * 1000; T.remMs = dur(n.phase) * 1000; T.lastSec = dur(n.phase); T.lastTick = -1;
     buildPips();
   }
   function startFight() {
@@ -454,13 +528,16 @@
     if (moved) play(cfg.bell);
     var rem = T.endAt - t, sec = Math.ceil(rem / 1000);
     if (sec !== T.lastSec) {
-      var warned = false;
-      if (!moved && T.phase === 'round' && cfg.warnSec > 0 && T.lastSec > cfg.warnSec && sec <= cfg.warnSec && sec >= cfg.warnSec - 1) { play(cfg.warn); warned = cfg.warn !== 'none'; }
+      if (!moved && (T.phase === 'round' || (T.phase === 'rest' && cfg.restWarn)) && cfg.warnSec > 0 && T.lastSec > cfg.warnSec && sec <= cfg.warnSec && sec >= cfg.warnSec - 1) { play(cfg.warn, T.phase); if (cfg.warn !== 'none') T.quietUntil = t + (cfg.warn === 'clap2' ? 800 : 1300); }
       if (!moved && T.phase === 'prep' && sec >= 1 && sec <= 3) play('tick');
-      // continuous ticking; skipped on the second the warning sound plays so they don't clash
-      if (!moved && !warned && sec >= 1 && T.lastSec - sec === 1 &&
-          ((T.phase === 'round' && cfg.tickRound) || (T.phase === 'rest' && cfg.tickRest))) play('clock');
       T.lastSec = sec;
+    }
+    // continuous ticking (1 or 2 per second); paused while the warning clapper plays, no bursts after catching up
+    var unit = cfg.tickRate || 1000, ti = Math.ceil(rem / unit);
+    if (ti !== T.lastTick) {
+      if (!moved && T.lastTick - ti === 1 && ti >= 1 && t >= T.quietUntil &&
+          ((T.phase === 'round' && cfg.tickRound) || (T.phase === 'rest' && cfg.tickRest))) play(cfg.tickSound);
+      T.lastTick = ti;
     }
     T.remMs = rem; render();
   }
@@ -480,7 +557,7 @@
     if (!T.running) T.remMs = dur(T.phase) * 1000;
     render();
   }
-  function restart() { T.remMs = dur(T.phase) * 1000; T.endAt = now() + T.remMs; T.lastSec = dur(T.phase); render(); }
+  function restart() { T.remMs = dur(T.phase) * 1000; T.endAt = now() + T.remMs; T.lastSec = dur(T.phase); T.lastTick = -1; render(); }
 
   function buildPips() {
     var box = $('pips'); box.innerHTML = '';
@@ -497,10 +574,11 @@
     var rem = T.running ? Math.max(0, T.endAt - now()) : T.remMs;
     var sec = Math.ceil(rem / 1000);
     var warn = T.phase === 'round' && cfg.warnSec > 0 && sec <= cfg.warnSec;
+    var restWarn = T.phase === 'rest' && cfg.restWarn && cfg.warnSec > 0 && cfg.restSec > cfg.warnSec && sec <= cfg.warnSec;
     var el = $('timer');
-    el.dataset.phase = T.phase; el.dataset.running = String(T.running); el.dataset.warn = String(warn);
+    el.dataset.phase = T.phase; el.dataset.running = String(T.running); el.dataset.warn = String(warn || restWarn);
     $('roundLabel').textContent = 'ROUND ' + T.round + ' OF ' + cfg.rounds;
-    var label = T.phase === 'rest' ? 'REST' : T.phase === 'prep' ? 'GET READY' : warn ? sec + ' SECONDS' : 'FIGHT';
+    var label = T.phase === 'rest' ? (restWarn ? 'GET READY' : 'REST') : T.phase === 'prep' ? 'GET READY' : warn ? sec + (sec === 1 ? ' SECOND' : ' SECONDS') : 'FIGHT';
     if (!T.running) label = 'PAUSED';
     if ($('phaseLabel').textContent !== label) $('phaseLabel').textContent = label;
     $('clock').textContent = fmt(sec);
